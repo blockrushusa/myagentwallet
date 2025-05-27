@@ -1,0 +1,40 @@
+# Security Headers
+Header always set X-Content-Type-Options nosniff
+Header always set X-Frame-Options DENY
+Header always set X-XSS-Protection "1; mode=block"
+Header always set Referrer-Policy "strict-origin-when-cross-origin"
+Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+
+# Content Security Policy
+Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; connect-src 'self' https: wss:; frame-src 'none'; object-src 'none'; base-uri 'self';"
+
+# HTTPS Redirect (if supported by hosting)
+RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Cache Control
+<filesMatch "\.(css|js|png|jpg|jpeg|gif|ico|svg)$">
+Header set Cache-Control "max-age=31536000, public"
+</filesMatch>
+
+# Deny access to sensitive files
+<files .env>
+order allow,deny
+deny from all
+</files>
+
+<files .env.local>
+order allow,deny
+deny from all
+</files>
+
+# Custom error pages
+ErrorDocument 404 /404.html
+ErrorDocument 500 /500.html
+
+# Disable server signature
+ServerSignature Off
+
+# Disable directory browsing
+Options -Indexes
