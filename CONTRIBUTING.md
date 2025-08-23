@@ -29,7 +29,7 @@ Thank you for considering contributing to MyAgentWallet! This project aims to pr
 ### **Development Setup:**
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/myagentwallet
+git clone https://github.com/myagentwallet/myagentwallet
 cd myagentwallet
 
 # Install dependencies

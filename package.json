@@ -8,7 +8,7 @@
   "keywords": ["web3", "wallet", "ethereum", "cryptocurrency", "vanity-address"],
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/myagentwallet"
+    "url": "https://github.com/myagentwallet/myagentwallet"
   },
   "scripts": {
     "dev": "next dev --turbopack",
