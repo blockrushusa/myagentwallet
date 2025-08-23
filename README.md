@@ -91,6 +91,26 @@ Built for static hosting environments like Dreamhost:
 
 Ready for deployment to any static hosting provider supporting `.htaccess` files.
 
+## 💖 Support This Project
+
+If MyAgentWallet has been helpful to you, consider supporting continued development:
+
+### Donation Address (ERC20 tokens on Ethereum mainnet):
+```
+0xE73705C1479f68F958Bf4F35a368B2dD838FD575
+```
+
+**Accepted tokens**: USDC, USDT, DAI, ETH, or any ERC20 tokens  
+**Network**: Ethereum Mainnet only  
+
+Your contributions help keep this project:
+- ✅ **Free and open source**
+- ✅ **Actively maintained** 
+- ✅ **Security-focused**
+- ✅ **Community-driven**
+
+Every donation, no matter the size, is deeply appreciated and directly supports development, security audits, and infrastructure costs.
+
 ---
 
 **Project ID**: 254989a6385b6074e2abe35d3555ac9c  

@@ -81,7 +81,8 @@ export class WalletConnectManager {
       const { ethers } = await import('ethers');
       const wallet = new ethers.Wallet(privateKey);
       
-      console.log('Created wallet from private key:', wallet.address);
+      // Security: Never log private keys or addresses to console
+      console.log('Wallet created successfully');
 
       // Try to connect using the appKit
       try {

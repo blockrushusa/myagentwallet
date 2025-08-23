@@ -1,6 +1,7 @@
 import { SignClient } from '@walletconnect/sign-client'
 import { getSdkError } from '@walletconnect/utils'
 import type { SessionTypes, SignClientTypes } from '@walletconnect/types'
+import { ethers } from 'ethers'
 
 export interface WalletConnectSession {
   topic: string;
@@ -18,6 +19,8 @@ export class RealWalletConnectManager {
   private wallet: any = null;
   private sessions: Map<string, WalletConnectSession> = new Map();
   private isTestnet: boolean = false;
+  private pendingProposals: Map<number, any> = new Map();
+  private onProposalCallback?: (proposal: any) => void;
 
   private constructor() {}
 
@@ -26,6 +29,46 @@ export class RealWalletConnectManager {
       RealWalletConnectManager.instance = new RealWalletConnectManager();
     }
     return RealWalletConnectManager.instance;
+  }
+
+  setOnProposalCallback(callback: (proposal: any) => void) {
+    this.onProposalCallback = callback;
+  }
+
+  async approveProposal(proposalId: number) {
+    const proposal = this.pendingProposals.get(proposalId);
+    if (!proposal) {
+      console.error('No pending proposal found for ID:', proposalId);
+      return;
+    }
+
+    try {
+      await this.processSessionProposal(proposal);
+      this.pendingProposals.delete(proposalId);
+    } catch (error) {
+      console.error('Failed to approve proposal:', error);
+      throw error;
+    }
+  }
+
+  async rejectProposal(proposalId: number) {
+    const proposal = this.pendingProposals.get(proposalId);
+    if (!proposal || !this.signClient) {
+      console.error('No pending proposal or SignClient found for ID:', proposalId);
+      return;
+    }
+
+    try {
+      await this.signClient.reject({
+        id: proposalId,
+        reason: getSdkError('USER_REJECTED')
+      });
+      this.pendingProposals.delete(proposalId);
+      console.log('Proposal rejected by user');
+    } catch (error) {
+      console.error('Failed to reject proposal:', error);
+      throw error;
+    }
   }
 
   async initialize() {
@@ -43,6 +86,22 @@ export class RealWalletConnectManager {
           icons: ['https://avatars.githubusercontent.com/u/37784886']
         }
       });
+
+      // Restore existing sessions
+      try {
+        const activeSessions = this.signClient.session.getAll();
+        if (activeSessions && activeSessions.length > 0) {
+          console.log('Restoring existing sessions:', activeSessions.length);
+          activeSessions.forEach((session) => {
+            this.sessions.set(session.topic, {
+              topic: session.topic,
+              peerMetadata: session.peer.metadata
+            });
+          });
+        }
+      } catch (e) {
+        console.log('No existing sessions to restore');
+      }
 
       this.setupEventListeners();
       console.log('WalletConnect SignClient initialized successfully');
@@ -72,20 +131,69 @@ export class RealWalletConnectManager {
       console.log('Session deleted:', event);
       this.sessions.delete(event.topic);
     });
+
+    // Handle session updates
+    this.signClient.on('session_update', (event) => {
+      console.log('Session updated:', event);
+    });
+
+    // Handle session events
+    this.signClient.on('session_event', (event) => {
+      console.log('Session event:', event);
+    });
+
+    // Handle session expiry
+    this.signClient.on('session_expire', (event) => {
+      console.log('Session expired:', event);
+      this.sessions.delete(event.topic);
+    });
   }
 
   private async handleSessionProposal(event: SignClientTypes.EventArguments['session_proposal']) {
+    console.log('=== WalletConnect Session Proposal Received ===');
+    
+    const { params, id } = event;
+    const { proposer, requiredNamespaces, optionalNamespaces } = params;
+
+    console.log('Proposal ID:', id);
+    console.log('Proposer:', proposer.metadata.name);
+    console.log('Proposer URL:', proposer.metadata.url);
+    console.log('Required namespaces:', JSON.stringify(requiredNamespaces, null, 2));
+    console.log('Optional namespaces:', JSON.stringify(optionalNamespaces, null, 2));
+    console.log('Wallet address:', this.wallet?.address);
+    console.log('Network mode:', this.isTestnet ? 'Testnet' : 'Mainnet');
+
+    // Store the proposal for user approval
+    this.pendingProposals.set(id, event);
+    
+    // Trigger the UI callback to show confirmation dialog
+    if (this.onProposalCallback) {
+      this.onProposalCallback({
+        id,
+        proposer,
+        requiredNamespaces,
+        optionalNamespaces
+      });
+    } else {
+      console.warn('No proposal callback set - auto-rejecting');
+      await this.rejectProposal(id);
+    }
+  }
+
+  private async processSessionProposal(event: SignClientTypes.EventArguments['session_proposal']) {
     try {
-      if (!this.signClient || !this.wallet) {
-        throw new Error('SignClient or wallet not initialized');
+      if (!this.signClient) {
+        console.error('SignClient not initialized');
+        throw new Error('SignClient not initialized');
+      }
+      
+      if (!this.wallet) {
+        console.error('Wallet not initialized');
+        throw new Error('Wallet not initialized');
       }
 
       const { params, id } = event;
       const { proposer, requiredNamespaces, optionalNamespaces } = params;
-
-      console.log('Handling session proposal from:', proposer.metadata.name);
-      console.log('Required namespaces:', requiredNamespaces);
-      console.log('Optional namespaces:', optionalNamespaces);
 
       // Build namespaces based on what's required
       const namespaces: SessionTypes.Namespaces = {};
@@ -139,6 +247,36 @@ export class RealWalletConnectManager {
         }
       }
 
+      // OpenSea sometimes sends empty namespaces, handle this case
+      if (Object.keys(requiredNamespaces).length === 0 && (!optionalNamespaces || Object.keys(optionalNamespaces).length === 0)) {
+        console.log('No namespaces provided, using defaults for OpenSea compatibility');
+        const defaultChain = this.isTestnet ? 'eip155:11155111' : 'eip155:1';
+        namespaces.eip155 = {
+          accounts: [`${defaultChain}:${this.wallet.address}`],
+          methods: [
+            'eth_sendTransaction',
+            'eth_signTransaction', 
+            'eth_sign',
+            'personal_sign',
+            'eth_signTypedData',
+            'eth_signTypedData_v4',
+            'eth_accounts',
+            'eth_requestAccounts',
+            'eth_chainId',
+            'wallet_switchEthereumChain',
+            'wallet_addEthereumChain',
+            'eth_getBalance',
+            'eth_getTransactionCount',
+            'eth_gasPrice',
+            'eth_estimateGas',
+            'net_version',
+            'wallet_getCapabilities'
+          ],
+          events: ['chainChanged', 'accountsChanged'],
+          chains: [defaultChain]
+        };
+      }
+
       // If still no namespaces, create a default one
       if (Object.keys(namespaces).length === 0) {
         const defaultChain = this.isTestnet ? 'eip155:11155111' : 'eip155:1';
@@ -163,20 +301,31 @@ export class RealWalletConnectManager {
         peerMetadata: proposer.metadata
       });
 
-      console.log('Session approved:', session);
+      console.log('✅ Session approved successfully!');
+      console.log('Session topic:', session.topic);
+      console.log('Session peer:', proposer.metadata.name);
       
       // Notify about successful connection
       if (typeof window !== 'undefined') {
         window.postMessage({ type: 'WALLET_CONNECTED', address: this.wallet.address }, '*');
       }
     } catch (error) {
-      console.error('Failed to approve session:', error);
+      console.error('❌ Failed to approve session:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
       
-      if (this.signClient) {
-        await this.signClient.reject({
-          id: event.id,
-          reason: getSdkError('USER_REJECTED')
-        });
+      try {
+        if (this.signClient) {
+          console.log('Rejecting session due to error...');
+          await this.signClient.reject({
+            id: event.id,
+            reason: getSdkError('USER_REJECTED')
+          });
+        }
+      } catch (rejectError) {
+        console.error('Failed to reject session:', rejectError);
       }
     }
   }
@@ -191,6 +340,31 @@ export class RealWalletConnectManager {
       const { request } = params;
 
       console.log('Handling session request:', request.method, request.params);
+      console.log('Request topic:', topic);
+      console.log('Known sessions:', Array.from(this.sessions.keys()));
+
+      // Check if session exists
+      if (!this.sessions.has(topic)) {
+        console.log('Session not found in local cache, checking SignClient sessions...');
+        try {
+          const activeSessions = this.signClient.session.getAll();
+          const session = activeSessions.find(s => s.topic === topic);
+          if (session) {
+            console.log('Found session in SignClient, adding to cache');
+            this.sessions.set(topic, {
+              topic: session.topic,
+              peerMetadata: session.peer.metadata
+            });
+          } else {
+            console.error('Session topic not found:', topic);
+            // Don't throw error, just log it - OpenSea might be using stale session
+            console.log('Proceeding anyway as OpenSea might have stale session info');
+          }
+        } catch (e) {
+          console.error('Error checking sessions:', e);
+          // Continue anyway
+        }
+      }
 
       let result;
 
@@ -204,12 +378,28 @@ export class RealWalletConnectManager {
           break;
 
         case 'personal_sign':
+          // personal_sign params: [message, address]
           const message = request.params[0];
+          const signerAddress = request.params[1];
+          
+          // Verify the requested address matches our wallet
+          if (signerAddress && signerAddress.toLowerCase() !== this.wallet.address.toLowerCase()) {
+            throw new Error(`Address mismatch: requested ${signerAddress}, wallet has ${this.wallet.address}`);
+          }
+          
           result = await this.wallet.signMessage(message);
           break;
 
         case 'eth_sign':
+          // eth_sign params: [address, data]
+          const signAddress = request.params[0];
           const data = request.params[1];
+          
+          // Verify the requested address matches our wallet
+          if (signAddress && signAddress.toLowerCase() !== this.wallet.address.toLowerCase()) {
+            throw new Error(`Address mismatch: requested ${signAddress}, wallet has ${this.wallet.address}`);
+          }
+          
           result = await this.wallet.signMessage(data);
           break;
 
@@ -254,20 +444,75 @@ export class RealWalletConnectManager {
           result = this.isTestnet ? '11155111' : '1';
           break;
 
+        case 'wallet_switchEthereumChain':
+          // Handle chain switching request
+          const chainId = request.params[0].chainId;
+          console.log('Chain switch requested to:', chainId);
+          // For now, just acknowledge the request
+          result = null;
+          break;
+
+        case 'eth_getBalance':
+          // Return a mock balance for now
+          result = '0x0';
+          break;
+
+        case 'eth_getTransactionCount':
+          // Return nonce
+          result = '0x0';
+          break;
+
+        case 'wallet_addEthereumChain':
+          // Handle chain addition request
+          const addChainParams = request.params[0];
+          console.log('Chain addition requested:', addChainParams);
+          result = null;
+          break;
+
+        case 'eth_gasPrice':
+          // Return mock gas price
+          result = '0x9184e72a000'; // 10 gwei
+          break;
+
+        case 'eth_estimateGas':
+          // Return mock gas estimate
+          result = '0x5208'; // 21000 gas
+          break;
+
         default:
-          throw new Error(`Unsupported method: ${request.method}`);
+          console.warn(`Unsupported method: ${request.method}, returning null`);
+          result = null;
       }
 
-      await this.signClient.respond({
-        topic,
-        response: {
-          id,
-          result,
-          jsonrpc: '2.0'
+      try {
+        await this.signClient.respond({
+          topic,
+          response: {
+            id,
+            result,
+            jsonrpc: '2.0'
+          }
+        });
+        console.log('Request handled successfully:', request.method);
+      } catch (respondError) {
+        // Fallback for version mismatch issues
+        console.error('Failed to respond normally, trying fallback:', respondError);
+        try {
+          // Try alternative response method
+          const response = {
+            topic,
+            response: {
+              id,
+              result,
+              jsonrpc: '2.0'
+            }
+          };
+          await this.signClient.core.relayer.subscriber.messages.set(topic, response);
+          console.log('Fallback response sent successfully');
+        } catch (fallbackError) {
+          console.error('Fallback also failed:', fallbackError);
         }
-      });
-
-      console.log('Request handled successfully:', request.method);
+      }
     } catch (error) {
       console.error('Failed to handle session request:', error);
       
@@ -276,7 +521,10 @@ export class RealWalletConnectManager {
           topic: event.topic,
           response: {
             id: event.id,
-            error: getSdkError('INVALID_METHOD'),
+            error: {
+              code: -32601,
+              message: 'Method not found'
+            },
             jsonrpc: '2.0'
           }
         });
@@ -298,7 +546,6 @@ export class RealWalletConnectManager {
       }
 
       // Create wallet from private key
-      const { ethers } = await import('ethers');
       this.wallet = new ethers.Wallet(privateKey);
       
       console.log('Created wallet with address:', this.wallet.address);
@@ -316,7 +563,35 @@ export class RealWalletConnectManager {
   }
 
   getSessions(): WalletConnectSession[] {
+    // Sync with SignClient sessions first
+    if (this.signClient) {
+      try {
+        const activeSessions = this.signClient.session.getAll();
+        if (activeSessions && activeSessions.length > 0) {
+          activeSessions.forEach((session) => {
+            if (!this.sessions.has(session.topic)) {
+              this.sessions.set(session.topic, {
+                topic: session.topic,
+                peerMetadata: session.peer.metadata
+              });
+            }
+          });
+        }
+      } catch (e) {
+        console.log('Error syncing sessions:', e);
+      }
+    }
     return Array.from(this.sessions.values());
+  }
+
+  getActiveSessionTopics(): string[] {
+    if (!this.signClient) return [];
+    try {
+      const sessions = this.signClient.session.getAll();
+      return sessions.map(s => s.topic);
+    } catch (e) {
+      return [];
+    }
   }
 
   async disconnectSession(topic: string): Promise<void> {

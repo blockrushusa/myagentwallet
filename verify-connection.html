@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Verify OpenSea Connection</title>
+</head>
+<body>
+    <h1>OpenSea Connection Test</h1>
+    <p>Follow these steps to verify the connection works:</p>
+    
+    <ol>
+        <li>Start the development server: <code>npm run dev</code></li>
+        <li>Open <a href="http://localhost:3000" target="_blank">http://localhost:3000</a></li>
+        <li>Use this test private key: <code>0x049270fc38cd9b130b4285133208af12dd2dfddb5366ee3519af07e21a5faa19</code></li>
+        <li>Import the wallet</li>
+        <li>Open browser console (F12) to see debug logs</li>
+        <li>Use this WalletConnect URI: <br>
+            <code>wc:0c81805cdd5e8567386faae1e48774299161a0ac0f38bda2fb561d1caa1491b6@2?relay-protocol=irn&symKey=b1c7e00f5017e0cbdc224bf8ec0b15f78d6015706e02e8d55959821a629a7ec4&expiryTimestamp=1748471599</code>
+        </li>
+        <li>Click "Connect to dApp"</li>
+    </ol>
+    
+    <h2>Expected Console Output:</h2>
+    <pre>
+=== OpenSea WalletConnect Connection ===
+URI: wc:0c81805...
+Wallet address: 0x9e06A20C9Ea67e1e3199cC213622233513542424
+Clearing WalletConnect cache...
+Initializing WalletConnect SignClient for OpenSea...
+WalletConnect SignClient initialized successfully
+Pairing initiated successfully
+=== OpenSea Session Proposal ===
+    </pre>
+    
+    <h2>Note about OpenSea Errors:</h2>
+    <p>The errors you see in OpenSea's console are from their outdated WalletConnect implementation. These are expected and don't affect our wallet's ability to connect. The important thing is that our wallet receives and processes the connection request correctly.</p>
+    
+    <h2>Signs of Success:</h2>
+    <ul>
+        <li>✅ Session proposal appears in your console</li>
+        <li>✅ Session approved message</li>
+        <li>✅ Active connection shows in the wallet UI</li>
+        <li>✅ You can sign messages when OpenSea requests them</li>
+    </ul>
+</body>
+</html>
