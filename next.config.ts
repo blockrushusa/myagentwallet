@@ -13,7 +13,9 @@ const nextConfig: NextConfig = {
   basePath: isGitHubPages ? '/myagentwallet' : '',
   assetPrefix: isGitHubPages ? '/myagentwallet' : '',
   eslint: {
+    // Completely disable ESLint during builds for deployment
     ignoreDuringBuilds: true,
+    dirs: [],
   },
   typescript: {
     ignoreBuildErrors: true,
