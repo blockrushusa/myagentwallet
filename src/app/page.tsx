@@ -38,6 +38,8 @@ export default function HomePage() {
   const [showAddress, setShowAddress] = useState(true)
   const [showPrivateKey, setShowPrivateKey] = useState(false)
   const [pendingProposal, setPendingProposal] = useState<any>(null)
+  const [pendingRequests, setPendingRequests] = useState<any[]>([])
+  const [showPendingRequests, setShowPendingRequests] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
 
   useEffect(() => {
@@ -158,6 +160,52 @@ export default function HomePage() {
     }
   }
 
+  // Check for pending requests function
+  const checkForPendingRequests = async () => {
+    try {
+      const { RealWalletConnectManager } = await import('@/utils/walletconnect-real')
+      const wcManager = RealWalletConnectManager.getInstance()
+      const pendingReqs = wcManager.getPendingRequests()
+      setPendingRequests(pendingReqs)
+      console.log('🔍 Found pending requests:', pendingReqs)
+      if (pendingReqs.length > 0) {
+        setShowPendingRequests(true)
+        showMessage(`Found ${pendingReqs.length} pending request(s)!`, 'warning')
+      } else {
+        showMessage('No pending requests found.', 'success')
+      }
+    } catch (error) {
+      console.error('Failed to check pending requests:', error)
+    }
+  }
+
+  // Handle request approval/rejection
+  const handleApproveRequest = async (requestId: number) => {
+    try {
+      const { RealWalletConnectManager } = await import('@/utils/walletconnect-real')
+      const wcManager = RealWalletConnectManager.getInstance()
+      await wcManager.approveRequest(requestId)
+      showMessage('Request approved!', 'success')
+      await checkForPendingRequests() // Refresh the list
+    } catch (error) {
+      console.error('Failed to approve request:', error)
+      showMessage('Failed to approve request', 'error')
+    }
+  }
+
+  const handleRejectRequest = async (requestId: number) => {
+    try {
+      const { RealWalletConnectManager } = await import('@/utils/walletconnect-real')
+      const wcManager = RealWalletConnectManager.getInstance()
+      await wcManager.rejectRequest(requestId)
+      showMessage('Request rejected!', 'success')
+      await checkForPendingRequests() // Refresh the list
+    } catch (error) {
+      console.error('Failed to reject request:', error)
+      showMessage('Failed to reject request', 'error')
+    }
+  }
+
   const handleConnect = async () => {
     if (!currentWallet) {
       setError('Please generate or import a wallet first')
@@ -188,6 +236,14 @@ export default function HomePage() {
         console.log('Setting pending proposal:', proposal)
         setPendingProposal(proposal)
         showMessage('Connection request received! Please approve or reject.', 'warning')
+      })
+
+      // Set up request callback for transaction confirmations
+      wcManager.setOnRequestCallback((request) => {
+        console.log('🔔 New request detected:', request)
+        checkForPendingRequests()
+        setShowPendingRequests(true)
+        showMessage('Transaction request received! Check pending requests.', 'warning')
       })
       
       // Initialize if needed
@@ -851,12 +907,13 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
               }}
             />
             
-            <div style={{ display: 'flex', gap: '1rem' }}>
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
               <button
                 onClick={handleConnect}
                 disabled={isLoading || !currentWallet}
                 style={{
                   flex: 1,
+                  minWidth: '200px',
                   padding: '1rem',
                   backgroundColor: '#805ad5',
                   color: 'white',
@@ -882,6 +939,23 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
                 }}
               >
                 Paste from Clipboard
+              </button>
+              <button
+                onClick={checkForPendingRequests}
+                disabled={!currentWallet}
+                style={{
+                  padding: '1rem',
+                  backgroundColor: !currentWallet ? '#f7fafc' : '#fbb6ce',
+                  color: !currentWallet ? '#a0aec0' : '#702459',
+                  border: `2px solid ${!currentWallet ? '#e2e8f0' : '#ed64a6'}`,
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  cursor: !currentWallet ? 'not-allowed' : 'pointer',
+                  opacity: !currentWallet ? 0.6 : 1,
+                  minWidth: '180px'
+                }}
+              >
+                🔍 Check Pending Requests
               </button>
             </div>
           </div>
@@ -1095,6 +1169,191 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
                 >
                   ✅ Approve
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Pending Requests Modal */}
+        {showPendingRequests && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '1rem'
+          }}>
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              maxWidth: '500px',
+              width: '100%',
+              maxHeight: '80vh',
+              overflow: 'auto',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+            }}>
+              <div style={{
+                padding: '1.5rem',
+                borderBottom: '1px solid #e5e7eb'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600', color: '#1f2937' }}>
+                    🔍 Pending Requests ({pendingRequests.length})
+                  </h3>
+                  <button
+                    onClick={() => setShowPendingRequests(false)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      fontSize: '1.5rem',
+                      cursor: 'pointer',
+                      color: '#6b7280',
+                      padding: '0.25rem'
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ padding: '1.5rem' }}>
+                {pendingRequests.length === 0 ? (
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '2rem',
+                    color: '#6b7280'
+                  }}>
+                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>✅</div>
+                    <p style={{ margin: 0, fontSize: '1.1rem' }}>No pending requests found</p>
+                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
+                      Try initiating a transaction in your dApp first
+                    </p>
+                  </div>
+                ) : (
+                  pendingRequests.map((request) => (
+                    <div key={request.id} style={{
+                      border: '2px solid #fbbf24',
+                      borderRadius: '8px',
+                      padding: '1rem',
+                      marginBottom: '1rem',
+                      backgroundColor: '#fffbeb'
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '0.75rem'
+                      }}>
+                        <div style={{ fontSize: '1rem', fontWeight: '600', color: '#92400e' }}>
+                          🔔 {request.method}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#78350f', fontFamily: 'monospace' }}>
+                          ID: {request.id}
+                        </div>
+                      </div>
+                      
+                      {request.method === 'eth_sendTransaction' && (
+                        <div style={{ marginBottom: '1rem' }}>
+                          <div style={{
+                            backgroundColor: '#fef2f2',
+                            border: '1px solid #fca5a5',
+                            borderRadius: '6px',
+                            padding: '0.75rem',
+                            marginBottom: '0.75rem'
+                          }}>
+                            <div style={{ fontSize: '0.85rem', color: '#dc2626', fontWeight: '600', marginBottom: '0.25rem' }}>
+                              ⚠️ Transaction will be sent to blockchain
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: '#b91c1c' }}>
+                              This will cost real gas fees and cannot be undone
+                            </div>
+                          </div>
+                          
+                          <div style={{ fontSize: '0.9rem', color: '#78350f', marginBottom: '0.5rem' }}>
+                            <strong>Transaction Details:</strong>
+                          </div>
+                          <div style={{
+                            backgroundColor: '#fef3c7',
+                            border: '1px solid #fbbf24',
+                            borderRadius: '4px',
+                            padding: '0.75rem',
+                            fontFamily: 'monospace',
+                            fontSize: '0.8rem',
+                            color: '#78350f',
+                            wordBreak: 'break-all'
+                          }}>
+                            <div><strong>To:</strong> {request.params[0]?.to || 'N/A'}</div>
+                            <div><strong>Value:</strong> {request.params[0]?.value ? `${parseInt(request.params[0].value, 16) / 1e18} ETH` : '0 ETH'}</div>
+                            <div><strong>Gas Limit:</strong> {request.params[0]?.gas ? parseInt(request.params[0].gas, 16) : 'auto'}</div>
+                            <div><strong>Gas Price:</strong> {request.params[0]?.gasPrice ? `${parseInt(request.params[0].gasPrice, 16) / 1e9} gwei` : 'auto'}</div>
+                            {request.params[0]?.data && request.params[0].data !== '0x' && (
+                              <div><strong>Data:</strong> {request.params[0].data.slice(0, 50)}...</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', gap: '0.75rem' }}>
+                        <button
+                          onClick={() => handleRejectRequest(request.id)}
+                          style={{
+                            flex: 1,
+                            padding: '0.75rem',
+                            backgroundColor: '#ef4444',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontSize: '1rem',
+                            fontWeight: '600',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ❌ Reject
+                        </button>
+                        <button
+                          onClick={() => handleApproveRequest(request.id)}
+                          style={{
+                            flex: 1,
+                            padding: '0.75rem',
+                            backgroundColor: '#10b981',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontSize: '1rem',
+                            fontWeight: '600',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ✅ Approve
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+
+                <div style={{ marginTop: '1rem' }}>
+                  <button
+                    onClick={checkForPendingRequests}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      backgroundColor: '#3b82f6',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '1rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🔄 Refresh Requests
+                  </button>
+                </div>
               </div>
             </div>
           </div>

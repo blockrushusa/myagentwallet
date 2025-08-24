@@ -21,7 +21,9 @@ export class RealWalletConnectManager {
   private sessions: Map<string, WalletConnectSession> = new Map();
   private currentChain: ChainConfig | null = null;
   private pendingProposals: Map<number, any> = new Map();
+  private pendingRequests: Map<number, any> = new Map();
   private onProposalCallback?: (proposal: any) => void;
+  private onRequestCallback?: (request: any) => void;
 
   private constructor() {}
 
@@ -34,6 +36,10 @@ export class RealWalletConnectManager {
 
   setOnProposalCallback(callback: (proposal: any) => void) {
     this.onProposalCallback = callback;
+  }
+
+  setOnRequestCallback(callback: (request: any) => void) {
+    this.onRequestCallback = callback;
   }
 
   async approveProposal(proposalId: number) {
@@ -70,6 +76,83 @@ export class RealWalletConnectManager {
       console.error('Failed to reject proposal:', error);
       throw error;
     }
+  }
+
+  async approveRequest(requestId: number) {
+    const request = this.pendingRequests.get(requestId);
+    if (!request) {
+      console.error('No pending request found for ID:', requestId);
+      return;
+    }
+
+    try {
+      // Process the request manually without recursion
+      await this.processSessionRequestDirectly(request);
+      this.pendingRequests.delete(requestId);
+    } catch (error) {
+      console.error('Failed to approve request:', error);
+      throw error;
+    }
+  }
+
+  private async processSessionRequestDirectly(event: SignClientTypes.EventArguments['session_request']) {
+    // Process the request directly without adding to pending or triggering callbacks
+    if (!this.signClient || !this.wallet) {
+      throw new Error('SignClient or wallet not initialized');
+    }
+
+    const { topic, params, id } = event;
+    const { request } = params;
+
+    console.log('🔄 Processing approved request directly:', request.method);
+    
+    // Temporarily disable callbacks to avoid loops
+    const originalRequestCallback = this.onRequestCallback;
+    this.onRequestCallback = undefined;
+    
+    try {
+      // Call the original handler
+      await this.handleSessionRequest(event);
+    } finally {
+      // Restore the callback
+      this.onRequestCallback = originalRequestCallback;
+    }
+  }
+
+  async rejectRequest(requestId: number) {
+    const request = this.pendingRequests.get(requestId);
+    if (!request || !this.signClient) {
+      console.error('No pending request or SignClient found for ID:', requestId);
+      return;
+    }
+
+    try {
+      await this.signClient.respond({
+        topic: request.topic,
+        response: {
+          id: requestId,
+          error: {
+            code: 4001,
+            message: 'User rejected the request'
+          },
+          jsonrpc: '2.0'
+        }
+      });
+      this.pendingRequests.delete(requestId);
+      console.log('Request rejected by user');
+    } catch (error) {
+      console.error('Failed to reject request:', error);
+      throw error;
+    }
+  }
+
+  getPendingRequests() {
+    return Array.from(this.pendingRequests.entries()).map(([id, request]) => ({
+      id,
+      method: request.params.request.method,
+      params: request.params.request.params,
+      topic: request.topic
+    }));
   }
 
   async initialize() {
@@ -344,6 +427,23 @@ export class RealWalletConnectManager {
       console.log('Request topic:', topic);
       console.log('Known sessions:', Array.from(this.sessions.keys()));
 
+      // Store the request for potential user confirmation
+      this.pendingRequests.set(id, event);
+      
+      // For transaction requests, trigger callback to show confirmation UI
+      if (request.method === 'eth_sendTransaction' || request.method === 'eth_signTransaction') {
+        console.log('🔔 Transaction request detected - notifying UI');
+        if (this.onRequestCallback) {
+          this.onRequestCallback({
+            id,
+            method: request.method,
+            params: request.params,
+            topic
+          });
+          return; // Don't auto-handle, wait for user confirmation
+        }
+      }
+
       // Check if session exists
       if (!this.sessions.has(topic)) {
         console.log('Session not found in local cache, checking SignClient sessions...');
@@ -461,9 +561,33 @@ export class RealWalletConnectManager {
           break;
 
         case 'eth_sendTransaction':
+          console.log('🚀 Sending transaction to blockchain...');
+          const sendTx = request.params[0];
+          console.log('Transaction details:', sendTx);
+          
+          // Create a provider connected to the current chain
+          const provider = new ethers.JsonRpcProvider(this.currentChain?.rpcUrl || 'https://eth.llamarpc.com');
+          const connectedWallet = this.wallet.connect(provider);
+          
+          // Send the transaction
+          const txResponse = await connectedWallet.sendTransaction(sendTx);
+          console.log('🎉 Transaction sent! Hash:', txResponse.hash);
+          
+          // Return transaction hash immediately - don't wait for confirmation
+          // This prevents timeout issues with dApps
+          result = txResponse.hash;
+          
+          // Monitor confirmation in background (don't await)
+          txResponse.wait(1).then(() => {
+            console.log('✅ Transaction confirmed in background:', txResponse.hash);
+          }).catch((error) => {
+            console.error('❌ Transaction failed in background:', error);
+          });
+          break;
+
         case 'eth_signTransaction':
-          const transaction = request.params[0];
-          result = await this.wallet.signTransaction(transaction);
+          const signTx = request.params[0];
+          result = await this.wallet.signTransaction(signTx);
           break;
 
         case 'eth_signTypedData':
@@ -547,6 +671,12 @@ export class RealWalletConnectManager {
       }
 
       try {
+        console.log('🔄 Sending response to dApp...');
+        console.log('  - Topic:', topic);
+        console.log('  - Request ID:', id);
+        console.log('  - Method:', request.method);
+        console.log('  - Result:', result);
+        
         await this.signClient.respond({
           topic,
           response: {
@@ -555,7 +685,9 @@ export class RealWalletConnectManager {
             jsonrpc: '2.0'
           }
         });
-        console.log('Request handled successfully:', request.method);
+        
+        console.log('✅ Response sent successfully to dApp for method:', request.method);
+        console.log('   Result sent:', result);
       } catch (respondError) {
         // Fallback for version mismatch issues
         console.error('Failed to respond normally, trying fallback:', respondError);
