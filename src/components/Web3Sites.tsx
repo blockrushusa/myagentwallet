@@ -1,5 +1,7 @@
 'use client'
 
+import { ChainConfig } from '@/utils/chains'
+
 interface Web3Site {
   name: string;
   mainnetUrl: string;
@@ -164,10 +166,12 @@ const web3Sites: Web3Site[] = [
 ];
 
 interface Web3SitesProps {
-  isTestnet: boolean;
+  selectedChain: string;
+  chainConfig: ChainConfig;
 }
 
-export default function Web3Sites({ isTestnet }: Web3SitesProps) {
+export default function Web3Sites({ selectedChain, chainConfig }: Web3SitesProps) {
+  const isTestnet = chainConfig.isTestnet;
   const getUrl = (site: Web3Site) => {
     if (isTestnet && site.testnetUrl) {
       return site.testnetUrl;

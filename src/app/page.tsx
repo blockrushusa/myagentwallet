@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import Web3Sites from '@/components/Web3Sites'
+import { ChainSelector } from '@/components/ChainSelector'
 import { preloadEthers } from '@/utils/preload-ethers'
 import { trackEvent, trackPageView } from '@/components/Analytics'
+import { ChainConfig, SUPPORTED_CHAINS } from '@/utils/chains'
 
 interface WalletData {
   address: string;
@@ -31,7 +33,8 @@ export default function HomePage() {
   const [showDisclaimer, setShowDisclaimer] = useState(true)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error' | 'warning'>('success')
-  const [isTestnet, setIsTestnet] = useState(false)
+  const [selectedChain, setSelectedChain] = useState('ethereum')
+  const [currentChainConfig, setCurrentChainConfig] = useState<ChainConfig>(SUPPORTED_CHAINS.ethereum)
   const [showAddress, setShowAddress] = useState(true)
   const [showPrivateKey, setShowPrivateKey] = useState(false)
   const [pendingProposal, setPendingProposal] = useState<any>(null)
@@ -44,6 +47,18 @@ export default function HomePage() {
     // Track page view (privacy-safe)
     trackPageView('Wallet Home')
   }, [])
+
+  // Handle chain switching
+  const handleChainChange = (chainKey: string, chain: ChainConfig) => {
+    setSelectedChain(chainKey)
+    setCurrentChainConfig(chain)
+    trackEvent('chain_switched', {
+      from_chain: selectedChain,
+      to_chain: chainKey,
+      to_chain_name: chain.name,
+      is_testnet: chain.isTestnet
+    })
+  }
 
   // Periodic session check
   useEffect(() => {
@@ -97,7 +112,9 @@ export default function HomePage() {
       // Track wallet generation (no sensitive data)
       trackEvent('wallet_generated', { 
         method: 'new_generation',
-        network: isTestnet ? 'testnet' : 'mainnet'
+        chain: selectedChain,
+        chain_name: currentChainConfig.name,
+        is_testnet: currentChainConfig.isTestnet
       })
     } catch (err) {
       setError('Failed to generate wallet')
@@ -132,7 +149,9 @@ export default function HomePage() {
       // Track wallet import (no sensitive data)
       trackEvent('wallet_generated', { 
         method: 'private_key_import',
-        network: isTestnet ? 'testnet' : 'mainnet'
+        chain: selectedChain,
+        chain_name: currentChainConfig.name,
+        is_testnet: currentChainConfig.isTestnet
       })
     } catch {
       setError('Failed to import wallet')
@@ -155,7 +174,8 @@ export default function HomePage() {
       setError('')
 
       console.log('=== Starting WalletConnect Connection ===')
-      console.log('Network mode:', isTestnet ? 'Sepolia Testnet' : 'Ethereum Mainnet')
+      console.log('Selected chain:', currentChainConfig.name, `(ID: ${currentChainConfig.id})`)
+      console.log('Chain RPC:', currentChainConfig.rpcUrl)
       console.log('Wallet address:', currentWallet.address)
       console.log('WalletConnect URI:', walletConnectUri)
 
@@ -175,8 +195,8 @@ export default function HomePage() {
       
       showMessage('Initializing connection...', 'warning')
       
-      // Connect with URI and network mode
-      await wcManager.connectWithUri(walletConnectUri, currentWallet.privateKey, isTestnet)
+      // Connect with URI and chain configuration
+      await wcManager.connectWithUri(walletConnectUri, currentWallet.privateKey, currentChainConfig)
       
       showMessage('Pairing initiated. Waiting for session proposal from dApp...', 'warning')
       
@@ -205,13 +225,18 @@ export default function HomePage() {
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-    const networkSuffix = isTestnet ? '-sepolia' : '-mainnet'
+    const chainSuffix = `-${selectedChain}`
     
     const walletData: any = {
       address: currentWallet.address,
-      network: isTestnet ? 'Sepolia Testnet' : 'Ethereum Mainnet',
+      chain: currentChainConfig.name,
+      chainId: currentChainConfig.id,
+      symbol: currentChainConfig.symbol,
+      rpcUrl: currentChainConfig.rpcUrl,
+      explorerUrl: currentChainConfig.explorerUrl,
+      isTestnet: currentChainConfig.isTestnet,
       created: new Date().toISOString(),
-      source: 'MyAgentWallet'
+      source: 'MyAgentWallet v2.0'
     }
 
     if (includePrivateKey) {
@@ -230,13 +255,16 @@ export default function HomePage() {
 
     if (format === 'json') {
       content = JSON.stringify(walletData, null, 2)
-      filename = `wallet-${currentWallet.address.slice(0, 8)}${networkSuffix}-${timestamp}.json`
+      filename = `wallet-${currentWallet.address.slice(0, 8)}${chainSuffix}-${timestamp}.json`
       mimeType = 'application/json'
     } else {
       content = `MyAgentWallet Export
 ===================
 Address: ${walletData.address}
-Network: ${walletData.network}
+Chain: ${walletData.chain} (ID: ${walletData.chainId})
+Symbol: ${walletData.symbol}
+RPC URL: ${walletData.rpcUrl}
+Explorer: ${walletData.explorerUrl}
 Created: ${walletData.created}
 Source: ${walletData.source}
 
@@ -245,7 +273,7 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
 ⚠️  Never share your private key with anyone!
 ⚠️  MyAgentWallet is for temporary use only!
 `
-      filename = `wallet-${currentWallet.address.slice(0, 8)}${networkSuffix}-${timestamp}.txt`
+      filename = `wallet-${currentWallet.address.slice(0, 8)}${chainSuffix}-${timestamp}.txt`
       mimeType = 'text/plain'
     }
 
@@ -406,159 +434,29 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
               BETA - Use at your own risk
             </span>
             
-            {/* Professional Network Switch */}
+            {/* Chain Selector */}
             <div style={{
               display: 'flex',
               alignItems: 'center',
               gap: '1rem'
             }}>
-              <label 
-                htmlFor="network-toggle"
-                style={{
-                  fontSize: '0.875rem',
-                  fontWeight: '600',
-                  color: '#374151',
-                  userSelect: 'none'
-                }}
-              >
-                Network:
+              <label style={{
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                color: '#374151',
+                userSelect: 'none'
+              }}>
+                Chain:
               </label>
               
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.75rem'
-              }}>
-                {/* Left Label - Mainnet */}
-                <span style={{
-                  fontSize: '0.75rem',
-                  fontWeight: '600',
-                  color: !isTestnet ? '#1e40af' : '#9ca3af',
-                  transition: 'color 0.2s ease',
-                  userSelect: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.25rem'
-                }}>
-                  <span style={{ fontSize: '12px' }}>🌐</span>
-                  Mainnet
-                </span>
-                
-                <div style={{
-                  position: 'relative',
-                  display: 'inline-flex',
-                  alignItems: 'center'
-                }}>
-                  {/* Hidden checkbox for accessibility */}
-                  <input
-                    type="checkbox"
-                    id="network-toggle"
-                    role="switch"
-                    checked={isTestnet}
-                    onChange={(e) => setIsTestnet(e.target.checked)}
-                    aria-label={`Switch to ${isTestnet ? 'mainnet' : 'testnet'} mode`}
-                    aria-describedby="network-description"
-                    style={{
-                      position: 'absolute',
-                      opacity: 0,
-                      width: '64px',
-                      height: '32px',
-                      cursor: 'pointer',
-                      zIndex: 10
-                    }}
-                    onFocus={(e) => {
-                      const parent = e.target.parentElement;
-                      if (parent) {
-                        parent.style.outline = '3px solid #3b82f6';
-                        parent.style.outlineOffset = '2px';
-                      }
-                    }}
-                    onBlur={(e) => {
-                      const parent = e.target.parentElement;
-                      if (parent) {
-                        parent.style.outline = 'none';
-                      }
-                    }}
-                  />
-                  
-                  {/* Switch Track */}
-                  <div style={{
-                    position: 'relative',
-                    width: '64px',
-                    height: '32px',
-                    backgroundColor: isTestnet ? '#10b981' : '#1e40af',
-                    borderRadius: '16px',
-                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                    boxShadow: isTestnet 
-                      ? 'inset 0 2px 4px rgba(16, 185, 129, 0.3), 0 1px 3px rgba(0, 0, 0, 0.1)'
-                      : 'inset 0 2px 4px rgba(30, 64, 175, 0.3), 0 1px 3px rgba(0, 0, 0, 0.1)',
-                    border: '2px solid',
-                    borderColor: isTestnet ? '#065f46' : '#1e3a8a'
-                  }}>
-                    {/* Switch Handle */}
-                    <div style={{
-                      position: 'absolute',
-                      top: '2px',
-                      left: isTestnet ? '34px' : '2px',
-                      width: '26px',
-                      height: '26px',
-                      backgroundColor: '#ffffff',
-                      borderRadius: '50%',
-                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.1)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '12px',
-                      border: '1px solid rgba(0, 0, 0, 0.1)'
-                    }}>
-                      {isTestnet ? '🧪' : '🌐'}
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Right Label - Testnet */}
-                <span style={{
-                  fontSize: '0.75rem',
-                  fontWeight: '600',
-                  color: isTestnet ? '#10b981' : '#9ca3af',
-                  transition: 'color 0.2s ease',
-                  userSelect: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.25rem'
-                }}>
-                  <span style={{ fontSize: '12px' }}>🧪</span>
-                  Testnet
-                </span>
-              </div>
-              
-              {/* Current State Display */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                padding: '0.375rem 0.75rem',
-                backgroundColor: isTestnet ? '#d1fae5' : '#dbeafe',
-                color: isTestnet ? '#065f46' : '#1e3a8a',
-                borderRadius: '8px',
-                fontSize: '0.75rem',
-                fontWeight: '600',
-                border: '1px solid',
-                borderColor: isTestnet ? '#a7f3d0' : '#93c5fd'
-              }}>
-                <span style={{ fontSize: '14px' }}>
-                  {isTestnet ? '🧪' : '🌐'}
-                </span>
-                <span>
-                  {isTestnet ? 'Sepolia Testnet' : 'Ethereum Mainnet'}
-                </span>
-              </div>
+              <ChainSelector
+                selectedChain={selectedChain}
+                onChainChange={handleChainChange}
+              />
             </div>
             
             {/* Hidden description for screen readers */}
             <span 
-              id="network-description" 
               style={{
                 position: 'absolute',
                 left: '-10000px',
@@ -567,7 +465,7 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
                 overflow: 'hidden'
               }}
             >
-              Toggle between Ethereum mainnet and Sepolia testnet. Currently on {isTestnet ? 'testnet' : 'mainnet'}.
+              Select blockchain network. Currently on {currentChainConfig.name}.
             </span>
           </div>
         </div>
@@ -647,8 +545,8 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
           {/* Current Wallet Display */}
           {currentWallet && (
             <div style={{
-              backgroundColor: isTestnet ? '#f0fff4' : '#ebf8ff',
-              border: `2px solid ${isTestnet ? '#48bb78' : '#3182ce'}`,
+              backgroundColor: currentChainConfig.isTestnet ? '#f0fff4' : '#ebf8ff',
+              border: `2px solid ${currentChainConfig.isTestnet ? '#48bb78' : '#3182ce'}`,
               borderRadius: '8px',
               padding: '1rem',
               marginBottom: '1.5rem',
@@ -659,7 +557,7 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
                 position: 'absolute',
                 top: '-8px',
                 right: '16px',
-                backgroundColor: isTestnet ? '#48bb78' : '#3182ce',
+                backgroundColor: currentChainConfig.isTestnet ? '#48bb78' : '#3182ce',
                 color: 'white',
                 padding: '0.25rem 0.75rem',
                 borderRadius: '12px',
@@ -669,8 +567,8 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
                 alignItems: 'center',
                 gap: '0.25rem'
               }}>
-                <span>{isTestnet ? '🧪' : '🌐'}</span>
-                {isTestnet ? 'SEPOLIA TESTNET' : 'ETHEREUM MAINNET'}
+                <span>{currentChainConfig.isTestnet ? '🧪' : '🌐'}</span>
+                {currentChainConfig.name.toUpperCase()}
               </div>
               
               <div style={{ marginTop: '8px' }}>
@@ -683,7 +581,7 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
                   <p style={{ 
                     fontSize: '0.9rem', 
                     fontWeight: 'bold', 
-                    color: isTestnet ? '#22543d' : '#1a365d', 
+                    color: currentChainConfig.isTestnet ? '#22543d' : '#1a365d', 
                     margin: 0,
                     display: 'flex',
                     alignItems: 'center',
@@ -706,9 +604,9 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
                         fontWeight: '600',
                         backgroundColor: 'rgba(255, 255, 255, 0.8)',
                         border: '1px solid',
-                        borderColor: isTestnet ? '#9ae6b4' : '#93c5fd',
+                        borderColor: currentChainConfig.isTestnet ? '#9ae6b4' : '#93c5fd',
                         borderRadius: '6px',
-                        color: isTestnet ? '#065f46' : '#1e40af',
+                        color: currentChainConfig.isTestnet ? '#065f46' : '#1e40af',
                         cursor: 'pointer',
                         transition: 'all 0.2s ease'
                       }}
@@ -736,9 +634,9 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
                         fontWeight: '600',
                         backgroundColor: 'rgba(255, 255, 255, 0.8)',
                         border: '1px solid',
-                        borderColor: isTestnet ? '#9ae6b4' : '#93c5fd',
+                        borderColor: currentChainConfig.isTestnet ? '#9ae6b4' : '#93c5fd',
                         borderRadius: '6px',
-                        color: isTestnet ? '#065f46' : '#1e40af',
+                        color: currentChainConfig.isTestnet ? '#065f46' : '#1e40af',
                         cursor: 'pointer',
                         transition: 'all 0.2s ease'
                       }}
@@ -759,7 +657,7 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
                 <div style={{
                   fontSize: '0.8rem',
                   fontFamily: 'monospace',
-                  color: isTestnet ? '#276749' : '#2c5282',
+                  color: currentChainConfig.isTestnet ? '#276749' : '#2c5282',
                   margin: 0,
                   wordBreak: 'break-all',
                   backgroundColor: 'rgba(255, 255, 255, 0.6)',
@@ -770,7 +668,10 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
                   gap: '0.5rem'
                 }}>
                   {showAddress ? (
-                    currentWallet.address
+                    (() => {
+                      console.log('🖥️ UI displaying wallet address:', currentWallet.address)
+                      return currentWallet.address
+                    })()
                   ) : (
                     <span style={{ 
                       color: '#9ca3af',
@@ -784,6 +685,7 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
                   {showAddress && (
                     <button
                       onClick={() => {
+                        console.log('📋 Copying wallet address:', currentWallet.address)
                         navigator.clipboard.writeText(currentWallet.address)
                         showMessage('Address copied to clipboard!', 'success')
                       }}
@@ -791,11 +693,11 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
                         padding: '0.25rem',
                         backgroundColor: 'transparent',
                         border: '1px solid',
-                        borderColor: isTestnet ? '#9ae6b4' : '#93c5fd',
+                        borderColor: currentChainConfig.isTestnet ? '#9ae6b4' : '#93c5fd',
                         borderRadius: '4px',
                         cursor: 'pointer',
                         fontSize: '10px',
-                        color: isTestnet ? '#065f46' : '#1e40af',
+                        color: currentChainConfig.isTestnet ? '#065f46' : '#1e40af',
                         transition: 'all 0.2s ease',
                         marginLeft: 'auto',
                         flexShrink: 0
@@ -806,7 +708,7 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
                     </button>
                   )}
                 </div>
-                {isTestnet && (
+                {currentChainConfig.isTestnet && (
                   <div style={{ 
                     marginTop: '0.75rem',
                     padding: '0.5rem',
@@ -1003,15 +905,15 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
           {/* Connection Status */}
           {currentWallet && (
             <div style={{
-              backgroundColor: isTestnet ? '#f0fff4' : '#ebf8ff',
+              backgroundColor: currentChainConfig.isTestnet ? '#f0fff4' : '#ebf8ff',
               border: '1px solid',
-              borderColor: isTestnet ? '#a7f3d0' : '#93c5fd',
+              borderColor: currentChainConfig.isTestnet ? '#a7f3d0' : '#93c5fd',
               borderRadius: '8px',
               padding: '0.75rem',
               fontSize: '0.85rem',
-              color: isTestnet ? '#065f46' : '#1e40af'
+              color: currentChainConfig.isTestnet ? '#065f46' : '#1e40af'
             }}>
-              <strong>Ready to connect on {isTestnet ? 'Sepolia Testnet' : 'Ethereum Mainnet'}</strong>
+              <strong>Ready to connect on {currentChainConfig.name}</strong>
               <br />
               Wallet: {currentWallet.address.slice(0, 6)}...{currentWallet.address.slice(-4)}
             </div>
@@ -1110,9 +1012,9 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
               </div>
 
               <div style={{
-                backgroundColor: isTestnet ? '#f0fff4' : '#ebf8ff',
+                backgroundColor: currentChainConfig.isTestnet ? '#f0fff4' : '#ebf8ff',
                 border: '1px solid',
-                borderColor: isTestnet ? '#9ae6b4' : '#93c5fd',
+                borderColor: currentChainConfig.isTestnet ? '#9ae6b4' : '#93c5fd',
                 borderRadius: '6px',
                 padding: '0.75rem',
                 marginBottom: '1.5rem'
@@ -1120,15 +1022,15 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
                 <p style={{ 
                   margin: 0, 
                   fontSize: '0.85rem',
-                  color: isTestnet ? '#065f46' : '#1e40af',
+                  color: currentChainConfig.isTestnet ? '#065f46' : '#1e40af',
                   fontWeight: '600'
                 }}>
-                  📍 Network: {isTestnet ? 'Sepolia Testnet' : 'Ethereum Mainnet'}
+                  📍 Network: {currentChainConfig.name}
                 </p>
                 <p style={{ 
                   margin: '0.25rem 0 0 0', 
                   fontSize: '0.75rem',
-                  color: isTestnet ? '#22543d' : '#2563eb',
+                  color: currentChainConfig.isTestnet ? '#22543d' : '#2563eb',
                   fontFamily: 'monospace'
                 }}>
                   💼 {currentWallet?.address.slice(0, 6)}...{currentWallet?.address.slice(-4)}
@@ -1255,7 +1157,7 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
                   Wallet: {currentWallet.address.slice(0, 6)}...{currentWallet.address.slice(-4)}
                 </p>
                 <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.8rem', color: '#6b7280' }}>
-                  Network: {isTestnet ? 'Sepolia Testnet' : 'Ethereum Mainnet'}
+                  Network: {currentChainConfig.name}
                 </p>
               </div>
 
@@ -1399,7 +1301,7 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
         )}
 
         {/* Web3 Sites Directory */}
-        <Web3Sites isTestnet={isTestnet} />
+        <Web3Sites selectedChain={selectedChain} chainConfig={currentChainConfig} />
 
         {/* Support/Donation Footer */}
         <div style={{

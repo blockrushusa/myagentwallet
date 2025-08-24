@@ -2,6 +2,7 @@ import { SignClient } from '@walletconnect/sign-client'
 import { getSdkError } from '@walletconnect/utils'
 import type { SessionTypes, SignClientTypes } from '@walletconnect/types'
 import { ethers } from 'ethers'
+import { ChainConfig } from './chains'
 
 export interface WalletConnectSession {
   topic: string;
@@ -18,7 +19,7 @@ export class RealWalletConnectManager {
   private signClient: InstanceType<typeof SignClient> | null = null;
   private wallet: any = null;
   private sessions: Map<string, WalletConnectSession> = new Map();
-  private isTestnet: boolean = false;
+  private currentChain: ChainConfig | null = null;
   private pendingProposals: Map<number, any> = new Map();
   private onProposalCallback?: (proposal: any) => void;
 
@@ -161,7 +162,7 @@ export class RealWalletConnectManager {
     console.log('Required namespaces:', JSON.stringify(requiredNamespaces, null, 2));
     console.log('Optional namespaces:', JSON.stringify(optionalNamespaces, null, 2));
     console.log('Wallet address:', this.wallet?.address);
-    console.log('Network mode:', this.isTestnet ? 'Testnet' : 'Mainnet');
+    console.log('Selected chain:', this.currentChain?.name, `(ID: ${this.currentChain?.id})`);
 
     // Store the proposal for user approval
     this.pendingProposals.set(id, event);
@@ -200,7 +201,7 @@ export class RealWalletConnectManager {
       
       // Handle EIP155 namespace (Ethereum)
       if (requiredNamespaces.eip155) {
-        const chains = requiredNamespaces.eip155.chains || [this.isTestnet ? 'eip155:11155111' : 'eip155:1'];
+        const chains = requiredNamespaces.eip155.chains || [`eip155:${this.currentChain?.id || 1}`];
         const methods = requiredNamespaces.eip155.methods || [];
         const events = requiredNamespaces.eip155.events || [];
         
@@ -225,7 +226,7 @@ export class RealWalletConnectManager {
           // No required namespaces, so create from optional
           const accounts = optionalChains.map(chain => `${chain}:${this.wallet.address}`);
           
-          const defaultChain = this.isTestnet ? 'eip155:11155111' : 'eip155:1';
+          const defaultChain = `eip155:${this.currentChain?.id || 1}`;
           namespaces.eip155 = {
             accounts: accounts.length > 0 ? accounts : [`${defaultChain}:${this.wallet.address}`],
             methods: optionalMethods,
@@ -250,7 +251,7 @@ export class RealWalletConnectManager {
       // OpenSea sometimes sends empty namespaces, handle this case
       if (Object.keys(requiredNamespaces).length === 0 && (!optionalNamespaces || Object.keys(optionalNamespaces).length === 0)) {
         console.log('No namespaces provided, using defaults for OpenSea compatibility');
-        const defaultChain = this.isTestnet ? 'eip155:11155111' : 'eip155:1';
+        const defaultChain = `eip155:${this.currentChain?.id || 1}`;
         namespaces.eip155 = {
           accounts: [`${defaultChain}:${this.wallet.address}`],
           methods: [
@@ -279,7 +280,7 @@ export class RealWalletConnectManager {
 
       // If still no namespaces, create a default one
       if (Object.keys(namespaces).length === 0) {
-        const defaultChain = this.isTestnet ? 'eip155:11155111' : 'eip155:1';
+        const defaultChain = `eip155:${this.currentChain?.id || 1}`;
         namespaces.eip155 = {
           accounts: [`${defaultChain}:${this.wallet.address}`],
           methods: ['eth_sendTransaction', 'personal_sign', 'eth_sign', 'eth_signTypedData', 'eth_signTypedData_v4'],
@@ -382,12 +383,62 @@ export class RealWalletConnectManager {
           const message = request.params[0];
           const signerAddress = request.params[1];
           
+          console.log('🔐 personal_sign request:');
+          console.log('  - Message:', message);
+          console.log('  - Requested signer:', signerAddress);
+          console.log('  - Actual wallet address:', this.wallet.address);
+          
           // Verify the requested address matches our wallet
           if (signerAddress && signerAddress.toLowerCase() !== this.wallet.address.toLowerCase()) {
             throw new Error(`Address mismatch: requested ${signerAddress}, wallet has ${this.wallet.address}`);
           }
           
-          result = await this.wallet.signMessage(message);
+          // Check if this is a Decentraland request by examining the message
+          const isDecentraland = message.includes('446563656e7472616c616e64') || // "Decentraland" in hex
+                                 (typeof message === 'string' && message.includes('Decentraland'));
+          
+          if (isDecentraland) {
+            console.log('🔐 Detected Decentraland request - using special handling');
+            console.log('🔐 Original message:', message);
+            
+            try {
+              // Convert hex message to UTF-8 string
+              const messageBytes = ethers.getBytes(message);
+              const messageString = ethers.toUtf8String(messageBytes);
+              console.log('🔐 Decoded message string:', messageString);
+              
+              // Try signing the decoded string (standard Ethereum message signing)
+              result = await this.wallet.signMessage(messageString);
+              console.log('🔐 Decentraland signature (string):', result);
+              
+              // Test if this signature recovers correctly
+              try {
+                const recovered = ethers.verifyMessage(messageString, result);
+                console.log('🔐 String signature recovery test:', recovered);
+                console.log('🔐 String signature matches wallet?', recovered.toLowerCase() === this.wallet.address.toLowerCase());
+              } catch (e) {
+                console.error('🔐 String signature recovery failed:', e);
+              }
+              
+            } catch (e) {
+              console.error('🔐 String decoding failed, trying standard:', e);
+              result = await this.wallet.signMessage(message);
+            }
+          } else {
+            result = await this.wallet.signMessage(message);
+          }
+          
+          console.log('🔐 Signature created by wallet:', this.wallet.address);
+          console.log('🔐 Signature result:', result);
+          
+          // Test signature recovery to verify it works correctly
+          try {
+            const recovered = ethers.verifyMessage(message, result);
+            console.log('🔐 Signature recovery test - recovered address:', recovered);
+            console.log('🔐 Does recovered match wallet?', recovered.toLowerCase() === this.wallet.address.toLowerCase());
+          } catch (e) {
+            console.error('🔐 Signature recovery test failed:', e);
+          }
           break;
 
         case 'eth_sign':
@@ -395,12 +446,18 @@ export class RealWalletConnectManager {
           const signAddress = request.params[0];
           const data = request.params[1];
           
+          console.log('🔐 eth_sign request:');
+          console.log('  - Data:', data);
+          console.log('  - Requested signer:', signAddress);
+          console.log('  - Actual wallet address:', this.wallet.address);
+          
           // Verify the requested address matches our wallet
           if (signAddress && signAddress.toLowerCase() !== this.wallet.address.toLowerCase()) {
             throw new Error(`Address mismatch: requested ${signAddress}, wallet has ${this.wallet.address}`);
           }
           
           result = await this.wallet.signMessage(data);
+          console.log('🔐 Signature created by wallet:', this.wallet.address);
           break;
 
         case 'eth_sendTransaction':
@@ -412,11 +469,16 @@ export class RealWalletConnectManager {
         case 'eth_signTypedData':
         case 'eth_signTypedData_v4':
           const typedData = request.params[1];
+          console.log('🔐 eth_signTypedData request:');
+          console.log('  - Typed data:', typedData);
+          console.log('  - Wallet address:', this.wallet.address);
+          
           result = await this.wallet.signTypedData(
             typedData.domain,
             typedData.types,
             typedData.message
           );
+          console.log('🔐 Typed data signature created by wallet:', this.wallet.address);
           break;
 
         case 'wallet_getCapabilities':
@@ -436,12 +498,12 @@ export class RealWalletConnectManager {
 
         case 'eth_chainId':
           // Return appropriate chain ID based on network mode
-          result = this.isTestnet ? '0xaa36a7' : '0x1'; // Sepolia: 11155111, Mainnet: 1
+          result = `0x${(this.currentChain?.id || 1).toString(16)}`; // Convert chain ID to hex
           break;
 
         case 'net_version':
           // Return appropriate network ID
-          result = this.isTestnet ? '11155111' : '1';
+          result = (this.currentChain?.id || 1).toString();
           break;
 
         case 'wallet_switchEthereumChain':
@@ -532,13 +594,14 @@ export class RealWalletConnectManager {
     }
   }
 
-  async connectWithUri(uri: string, privateKey: string, isTestnet: boolean = false): Promise<void> {
+  async connectWithUri(uri: string, privateKey: string, chainConfig: ChainConfig): Promise<void> {
     try {
       console.log('Connecting with WalletConnect URI:', uri);
-      console.log('Network mode:', isTestnet ? 'Sepolia Testnet' : 'Ethereum Mainnet');
+      console.log('Selected chain:', chainConfig.name, `(ID: ${chainConfig.id})`);
+      console.log('Chain RPC:', chainConfig.rpcUrl);
 
-      // Set testnet mode
-      this.isTestnet = isTestnet;
+      // Set current chain
+      this.currentChain = chainConfig;
 
       // Initialize if needed
       if (!this.signClient) {
@@ -548,7 +611,9 @@ export class RealWalletConnectManager {
       // Create wallet from private key
       this.wallet = new ethers.Wallet(privateKey);
       
-      console.log('Created wallet with address:', this.wallet.address);
+      console.log('🏗️ WalletConnect created wallet from private key');
+      console.log('  - Private key (first 10 chars):', privateKey.slice(0, 10) + '...');
+      console.log('  - Derived wallet address:', this.wallet.address);
 
       // Pair with the URI
       if (this.signClient) {
