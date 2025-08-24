@@ -467,11 +467,17 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
                       zIndex: 10
                     }}
                     onFocus={(e) => {
-                      e.target.parentElement.style.outline = '3px solid #3b82f6';
-                      e.target.parentElement.style.outlineOffset = '2px';
+                      const parent = e.target.parentElement;
+                      if (parent) {
+                        parent.style.outline = '3px solid #3b82f6';
+                        parent.style.outlineOffset = '2px';
+                      }
                     }}
                     onBlur={(e) => {
-                      e.target.parentElement.style.outline = 'none';
+                      const parent = e.target.parentElement;
+                      if (parent) {
+                        parent.style.outline = 'none';
+                      }
                     }}
                   />
                   
