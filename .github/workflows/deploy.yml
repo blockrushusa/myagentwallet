@@ -38,13 +38,21 @@ jobs:
     - name: Build with Next.js for GitHub Pages
       run: |
         echo "Starting build process..."
+        echo "Environment: GITHUB_PAGES=$GITHUB_PAGES"
+        echo "Checking Next.js configuration..."
         npx next build
         echo "Build completed. Checking for out directory..."
         if [ -d "./out" ]; then
           echo "✅ out directory created successfully"
           ls -la ./out/
+        elif [ -d "./.next" ]; then
+          echo "⚠️ .next directory exists but out directory not created"
+          echo "Next.js may not be configured for static export properly"
+          echo "Attempting to verify config..."
+          cat next.config.ts | head -20
+          exit 1
         else
-          echo "❌ out directory was not created"
+          echo "❌ Neither out nor .next directory was created"
           echo "Current directory contents:"
           ls -la ./
           exit 1
