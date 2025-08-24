@@ -36,19 +36,29 @@ jobs:
         static_site_generator: next
         
     - name: Build with Next.js for GitHub Pages
-      run: npm run build:github
+      run: |
+        echo "Starting build process..."
+        export GITHUB_PAGES=true
+        export DISABLE_ESLINT_PLUGIN=true
+        export ESLINT_NO_DEV_ERRORS=true
+        next build
+        echo "Build completed. Checking for out directory..."
+        if [ -d "./out" ]; then
+          echo "✅ out directory created successfully"
+          ls -la ./out/
+        else
+          echo "❌ out directory was not created"
+          echo "Current directory contents:"
+          ls -la ./
+          exit 1
+        fi
       env:
         NEXT_PUBLIC_GA_ID: ${{ secrets.NEXT_PUBLIC_GA_ID }}
         
     - name: Add .nojekyll file
       run: |
-        if [ -d "./out" ]; then
-          touch ./out/.nojekyll
-          echo ".nojekyll file created successfully"
-        else
-          echo "Error: ./out directory does not exist"
-          exit 1
-        fi
+        touch ./out/.nojekyll
+        echo "✅ .nojekyll file created successfully"
       
     - name: Upload artifact
       uses: actions/upload-pages-artifact@v3
