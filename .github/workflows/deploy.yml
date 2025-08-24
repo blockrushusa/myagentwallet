@@ -38,10 +38,7 @@ jobs:
     - name: Build with Next.js for GitHub Pages
       run: |
         echo "Starting build process..."
-        export GITHUB_PAGES=true
-        export DISABLE_ESLINT_PLUGIN=true
-        export ESLINT_NO_DEV_ERRORS=true
-        next build
+        npx next build
         echo "Build completed. Checking for out directory..."
         if [ -d "./out" ]; then
           echo "✅ out directory created successfully"
@@ -53,6 +50,9 @@ jobs:
           exit 1
         fi
       env:
+        GITHUB_PAGES: true
+        DISABLE_ESLINT_PLUGIN: true
+        ESLINT_NO_DEV_ERRORS: true
         NEXT_PUBLIC_GA_ID: ${{ secrets.NEXT_PUBLIC_GA_ID }}
         
     - name: Add .nojekyll file
