@@ -15,10 +15,12 @@
     "dev:webpack": "next dev",
     "build": "next build",
     "build:turbo": "next build --turbo",
+    "build:github": "GITHUB_PAGES=true next build",
     "start": "next start",
     "lint": "next lint",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "export": "next build && next export"
   },
   "dependencies": {
     "@chakra-ui/react": "^3.19.1",

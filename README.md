@@ -89,7 +89,13 @@ Built for static hosting environments like Dreamhost:
 
 ## 🌍 Live Demo
 
-Ready for deployment to any static hosting provider supporting `.htaccess` files.
+### GitHub Pages (Recommended)
+**Live Site**: https://blockrushusa.github.io/myagentwallet/
+
+The app is automatically deployed to GitHub Pages on every push to the main branch.
+
+### Other Hosting
+Also ready for deployment to any static hosting provider supporting `.htaccess` files.
 
 ## 💖 Support This Project
 
