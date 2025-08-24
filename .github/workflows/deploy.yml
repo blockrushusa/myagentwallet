@@ -39,7 +39,11 @@ jobs:
       run: |
         echo "Starting build process..."
         echo "Environment: GITHUB_PAGES=$GITHUB_PAGES"
+        echo "Removing any compiled next.config.js to ensure TypeScript config is used..."
+        rm -f next.config.js
         echo "Checking Next.js configuration..."
+        cat next.config.ts | head -20
+        echo "Running Next.js build..."
         npx next build
         echo "Build completed. Checking for out directory..."
         if [ -d "./out" ]; then
@@ -48,8 +52,9 @@ jobs:
         elif [ -d "./.next" ]; then
           echo "⚠️ .next directory exists but out directory not created"
           echo "Next.js may not be configured for static export properly"
-          echo "Attempting to verify config..."
-          cat next.config.ts | head -20
+          echo "Build output indicates static export did not run"
+          echo "Current directory contents:"
+          ls -la ./
           exit 1
         else
           echo "❌ Neither out nor .next directory was created"
