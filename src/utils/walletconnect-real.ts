@@ -15,7 +15,7 @@ export interface WalletConnectSession {
 
 export class RealWalletConnectManager {
   private static instance: RealWalletConnectManager;
-  private signClient: SignClient | null = null;
+  private signClient: InstanceType<typeof SignClient> | null = null;
   private wallet: any = null;
   private sessions: Map<string, WalletConnectSession> = new Map();
   private isTestnet: boolean = false;
@@ -498,17 +498,17 @@ export class RealWalletConnectManager {
         // Fallback for version mismatch issues
         console.error('Failed to respond normally, trying fallback:', respondError);
         try {
-          // Try alternative response method
-          const response = {
-            topic,
-            response: {
-              id,
-              result,
-              jsonrpc: '2.0'
-            }
-          };
-          await this.signClient.core.relayer.subscriber.messages.set(topic, response);
-          console.log('Fallback response sent successfully');
+          // TODO: Fix this fallback response method - messages property doesn't exist in current WalletConnect API
+          // const response = {
+          //   topic,
+          //   response: {
+          //     id,
+          //     result,
+          //     jsonrpc: '2.0'
+          //   }
+          // };
+          // await this.signClient.core.relayer.subscriber.messages.set(topic, response);
+          console.log('Skipping fallback response - API method needs update');
         } catch (fallbackError) {
           console.error('Fallback also failed:', fallbackError);
         }

@@ -52,7 +52,7 @@ export default function VanityWallet() {
     
     // Calculate security impact
     const totalAddressSpace = Math.pow(16, 40) // Ethereum addresses have 40 hex characters
-    const reductionFactor = securityReduction / totalAddressSpace
+    const _reductionFactor = securityReduction / totalAddressSpace
     const bitsReduced = Math.log2(securityReduction)
     
     let securityImpact = ''
@@ -157,9 +157,10 @@ export default function VanityWallet() {
 
     // Use direct generation for simplicity and reliability
     generateVanityWalletSync()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pattern, patternType])
 
-  const generateActualWallet = (workerAttempts: number) => {
+  const _generateActualWallet = (workerAttempts: number) => {
     // Generate actual wallets using ethers.js until pattern matches
     const pattern_lower = pattern.toLowerCase()
     let localAttempts = 0

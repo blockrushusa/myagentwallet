@@ -1,7 +1,9 @@
 'use client'
 
-import { ChakraProvider } from '@chakra-ui/react'
+import { ChakraProvider, createSystem } from '@chakra-ui/react'
 import { useEffect, useState } from 'react'
+
+const system = createSystem()
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false)
@@ -14,5 +16,5 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return <div>{children}</div>
   }
 
-  return <ChakraProvider>{children}</ChakraProvider>
+  return <ChakraProvider value={system}>{children}</ChakraProvider>
 }

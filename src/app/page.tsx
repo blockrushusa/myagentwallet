@@ -713,10 +713,10 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
                         transition: 'all 0.2s ease'
                       }}
                       onMouseEnter={(e) => {
-                        e.target.style.backgroundColor = 'rgba(255, 255, 255, 1)'
+                        (e.target as HTMLElement).style.backgroundColor = 'rgba(255, 255, 255, 1)'
                       }}
                       onMouseLeave={(e) => {
-                        e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.8)'
+                        (e.target as HTMLElement).style.backgroundColor = 'rgba(255, 255, 255, 0.8)'
                       }}
                     >
                       <span style={{ fontSize: '10px' }}>
@@ -743,10 +743,10 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
                         transition: 'all 0.2s ease'
                       }}
                       onMouseEnter={(e) => {
-                        e.target.style.backgroundColor = 'rgba(255, 255, 255, 1)'
+                        (e.target as HTMLElement).style.backgroundColor = 'rgba(255, 255, 255, 1)'
                       }}
                       onMouseLeave={(e) => {
-                        e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.8)'
+                        (e.target as HTMLElement).style.backgroundColor = 'rgba(255, 255, 255, 0.8)'
                       }}
                       title="Export wallet"
                     >

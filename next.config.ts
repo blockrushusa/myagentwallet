@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
     dirs: [],
   },
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   // Optimize bundle for browser compatibility
   compiler: {

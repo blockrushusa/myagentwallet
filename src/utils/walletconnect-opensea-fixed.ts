@@ -1,5 +1,5 @@
 import { Core } from '@walletconnect/core'
-import { Web3Wallet } from '@walletconnect/web3wallet'
+import { Web3Wallet, type IWeb3Wallet } from '@walletconnect/web3wallet'
 import type { Web3WalletTypes } from '@walletconnect/web3wallet'
 
 export interface WalletConnectSession {
@@ -14,7 +14,7 @@ export interface WalletConnectSession {
 
 export class OpenSeaWalletConnectManager {
   private static instance: OpenSeaWalletConnectManager;
-  private web3wallet: Web3Wallet | null = null;
+  private web3wallet: IWeb3Wallet | null = null;
   private wallet: any = null;
   private sessions: Map<string, WalletConnectSession> = new Map();
 
@@ -202,13 +202,13 @@ export class OpenSeaWalletConnectManager {
   }
 
   private async onSessionRequest(event: Web3WalletTypes.SessionRequest) {
+    const { topic, params, id } = event;
+    const { request } = params;
+    
     try {
       if (!this.web3wallet || !this.wallet) {
         throw new Error('Wallet not initialized');
       }
-
-      const { topic, params, id } = event;
-      const { request } = params;
       
       console.log(`Processing ${request.method} request...`);
 

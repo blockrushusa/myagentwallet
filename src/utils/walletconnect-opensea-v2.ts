@@ -14,7 +14,7 @@ export interface WalletConnectSession {
 
 export class OpenSeaWalletConnectManager {
   private static instance: OpenSeaWalletConnectManager;
-  private signClient: SignClient | null = null;
+  private signClient: InstanceType<typeof SignClient> | null = null;
   private wallet: any = null;
   private sessions: Map<string, WalletConnectSession> = new Map();
   private pendingProposals: Map<number, SignClientTypes.EventArguments['session_proposal']> = new Map();

@@ -5,7 +5,13 @@
   "license": "MIT",
   "author": "MyAgentWallet Team",
   "description": "Privacy-first Web3 wallet for AI agents and temporary use",
-  "keywords": ["web3", "wallet", "ethereum", "cryptocurrency", "vanity-address"],
+  "keywords": [
+    "web3",
+    "wallet",
+    "ethereum",
+    "cryptocurrency",
+    "vanity-address"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/blockrushusa/myagentwallet"
@@ -53,6 +59,7 @@
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
+    "@types/crypto-js": "^4.2.2",
     "@types/jest": "^29.5.14",
     "@types/node": "^20",
     "@types/react": "^19",
