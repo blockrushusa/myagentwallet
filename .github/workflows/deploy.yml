@@ -41,7 +41,14 @@ jobs:
         NEXT_PUBLIC_GA_ID: ${{ secrets.NEXT_PUBLIC_GA_ID }}
         
     - name: Add .nojekyll file
-      run: touch ./out/.nojekyll
+      run: |
+        if [ -d "./out" ]; then
+          touch ./out/.nojekyll
+          echo ".nojekyll file created successfully"
+        else
+          echo "Error: ./out directory does not exist"
+          exit 1
+        fi
       
     - name: Upload artifact
       uses: actions/upload-pages-artifact@v3
