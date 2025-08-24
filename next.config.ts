@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   },
   // Configure for GitHub Pages
   basePath: isGitHubPages ? '/myagentwallet' : '',
-  assetPrefix: isGitHubPages ? '/myagentwallet/' : '',
+  assetPrefix: isGitHubPages ? '/myagentwallet' : '',
   eslint: {
     ignoreDuringBuilds: true,
   },
