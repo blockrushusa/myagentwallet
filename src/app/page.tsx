@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import Web3Sites from '@/components/Web3Sites'
 import { ChainSelector } from '@/components/ChainSelector'
 import { preloadEthers } from '@/utils/preload-ethers'
@@ -450,7 +451,7 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
             marginBottom: '1rem',
             flexWrap: 'wrap'
           }}>
-            <a
+            <Link
               href="/vanity"
               style={{
                 display: 'flex',
@@ -476,7 +477,7 @@ ${includePrivateKey ? `Private Key: ${walletData.privateKey}\n` : ''}${includeMn
               }}
             >
               ✨ Vanity Wallet Generator
-            </a>
+            </Link>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <span style={{

@@ -580,7 +580,7 @@ export class RealWalletConnectManager {
           // Monitor confirmation in background (don't await)
           txResponse.wait(1).then(() => {
             console.log('✅ Transaction confirmed in background:', txResponse.hash);
-          }).catch((error) => {
+          }).catch((error: any) => {
             console.error('❌ Transaction failed in background:', error);
           });
           break;
