@@ -2,6 +2,7 @@
 
 Online Web3 Wallet for AI Agents - A secure, temporary wallet solution for connecting to Web3 applications without browser extensions.
 
+
 ## 🚀 Features
 
 - **Multi-Chain Support**: Works with 15+ EVM networks including Monad, Ethereum, Polygon, Base, and more
@@ -113,17 +114,10 @@ MyAgentWallet supports multiple EVM-compatible networks:
 - `.htaccess` - Security headers for shared hosting
 - `__tests__/` - Unit tests for core functionality
 
-## 🌍 Live Demo
-
-### GitHub Pages (Recommended)
-**Live Site**: https://blockrushusa.github.io/myagentwallet/
-
-The app is automatically deployed to GitHub Pages on every push to the main branch.
-
-### Other Hosting
-Also ready for deployment to any static hosting provider supporting `.htaccess` files.
 
 ## 💖 Support This Project
+
+MyAgentWallet is **open source** and available on GitHub: https://github.com/blockrushusa/myagentwallet
 
 If MyAgentWallet has been helpful to you, consider supporting continued development:
 
